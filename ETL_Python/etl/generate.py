@@ -9,7 +9,6 @@ import os
 gen = Generic(locale=Locale.FR)
 
 def get_activity_type(employee_id, df_sport, df_rh_row):
-    
     id_col = 'ID salarié' if 'ID salarié' in df_sport.columns else 'id_salarie'
     
     sports_entry = df_sport[df_sport[id_col] == employee_id]
@@ -20,23 +19,6 @@ def get_activity_type(employee_id, df_sport, df_rh_row):
 
     if not sports_entry.empty and pd.notna(sports_entry.iloc[0][sport_col]):
         activity = sports_entry.iloc[0][sport_col]
-        
-    disp_col = 'Moyen de déplacement'
-    if 'Moyen de déplacement' not in df_rh_row:
-        if 'moyen_de_déplacement' in df_rh_row:
-             disp_col = 'moyen_de_déplacement'
-        elif 'moyen_de_deplacement' in df_rh_row:
-             disp_col = 'moyen_de_deplacement'
-    
-    if not activity and pd.notna(df_rh_row.get(disp_col)):
-        mode = df_rh_row[disp_col]
-        if 'vélo' in str(mode).lower():
-            activity = 'Vélo'
-        elif 'marche' in str(mode).lower() or 'running' in str(mode).lower():
-            activity = random.choice(['Marche', 'Running'])
-            
-    if not activity:
-        activity = random.choice(['Running', 'Marche', 'Vélo', 'Natation', 'Fitness'])
         
     return activity
 
@@ -57,7 +39,7 @@ def generate_duration_distance(activity):
         distance = random.uniform(0.5, 3)
         speed_kmh = random.uniform(1.5, 3) 
     elif activity in ['Tennis', 'Fitness', 'Escalade', 'Yoga', 'Crossfit']:
-        distance = None
+        distance = None 
         duration_minutes = random.randint(30, 120)
         return distance, duration_minutes
 
@@ -96,8 +78,20 @@ def generate_activities(df_rh, df_sport, num_activities=10, days_back=30):
     
     employees = df_rh.to_dict('records')
     
-    for _ in range(num_activities):
-        employee = random.choice(employees)
+    # Pre-filter employees who have a sport to avoid infinite loops or inefficient retries
+    eligible_employees = []
+    for emp in employees:
+        id_key = 'ID salarié' if 'ID salarié' in emp else 'id_salarie'
+        emp_id = emp[id_key]
+        if get_activity_type(emp_id, df_sport, emp):
+            eligible_employees.append(emp)
+            
+    if not eligible_employees:
+        print("Warning: No eligible employees with a declared sport found for activity generation.")
+        return pd.DataFrame()
+
+    while len(activities) < num_activities:
+        employee = random.choice(eligible_employees)
         
         id_key = 'ID salarié' if 'ID salarié' in employee else 'id_salarie'
         nom_key = 'Nom' if 'Nom' in employee else 'nom'
@@ -107,6 +101,10 @@ def generate_activities(df_rh, df_sport, num_activities=10, days_back=30):
         name = f"{employee[prenom_key]} {employee[nom_key]}"
         
         activity_type = get_activity_type(emp_id, df_sport, employee)
+        # Should not be None since we pre-filtered, but safe check
+        if not activity_type:
+            continue
+            
         if hasattr(activity_type, 'capitalize'):
              activity_type = activity_type.capitalize()
 
