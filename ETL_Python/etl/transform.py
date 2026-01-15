@@ -18,11 +18,14 @@ def geocode_address(address):
     return None
 
 def calculate_wellness_eligibility(df, df_activities):
-    """
-    Determine eligibility for 'Jours de bien-être'.
-    Condition: > 15 sport activities in the last year.
-    """
     if df_activities is None or df_activities.empty:
+        df["jours_bien_etre"] = False
+        return df
+
+    valid_employees = df[df['pratique_d_un_sport'].notna()]['id_salarie'].unique()
+    df_activities = df_activities[df_activities['employee_id'].isin(valid_employees)]
+    
+    if df_activities.empty:
         df["jours_bien_etre"] = False
         return df
 
@@ -67,6 +70,7 @@ def calculate_distances_and_prime(df_rh, df_sport, df_activities=None):
 
         if row.get("moyen_de_deplacement") == "véhicule thermique/électrique":
              eligible.append(False)
+
              invalid_count += 1
         else:
             max_dist = MAX_DISTANCE.get(row["pratique_d_un_sport"], 25)
@@ -84,7 +88,7 @@ def calculate_distances_and_prime(df_rh, df_sport, df_activities=None):
     df["distance_km"] = df["distance_km"].astype(float)
     
     df["prime_amount"] = (df["salaire_brut"] * PRIME_PERCENT * df["prime_eligible"]).astype(float)
-
+    
     df = calculate_wellness_eligibility(df, df_activities)
 
     cols_to_keep = [c for c in df.columns if not c.startswith('_airbyte') and c != 'employee_id']
