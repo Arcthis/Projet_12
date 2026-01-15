@@ -1,0 +1,7 @@
+pandas
+sqlalchemy
+psycopg2-binary
+geopy
+python-dotenv
+mimesis
+slack_sdk
