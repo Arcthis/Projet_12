@@ -5,3 +5,4 @@ geopy
 python-dotenv
 mimesis
 slack_sdk
+prometheus-client

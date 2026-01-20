@@ -10,4 +10,6 @@ COPY test_unified_pipeline.py .
 
 VOLUME /app/logs
 
+EXPOSE 8050
+
 CMD ["python", "main.py"]

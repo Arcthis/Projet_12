@@ -78,7 +78,6 @@ def generate_activities(df_rh, df_sport, num_activities=10, days_back=30):
     
     employees = df_rh.to_dict('records')
     
-    # Pre-filter employees who have a sport to avoid infinite loops or inefficient retries
     eligible_employees = []
     for emp in employees:
         id_key = 'ID salarié' if 'ID salarié' in emp else 'id_salarie'
@@ -101,7 +100,6 @@ def generate_activities(df_rh, df_sport, num_activities=10, days_back=30):
         name = f"{employee[prenom_key]} {employee[nom_key]}"
         
         activity_type = get_activity_type(emp_id, df_sport, employee)
-        # Should not be None since we pre-filtered, but safe check
         if not activity_type:
             continue
             

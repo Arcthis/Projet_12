@@ -2,7 +2,6 @@ import pandas as pd
 from geopy.distance import geodesic
 from config import MAX_DISTANCE, PRIME_PERCENT
 from datetime import datetime, timedelta
-
 from geopy.geocoders import Nominatim
 import time
 import json
@@ -49,7 +48,12 @@ def calculate_distances_and_prime(df_rh, df_sport, df_activities=None):
 
     distances = []
     eligible = []
-    invalid_count = 0
+
+    invalid_reasons = {
+        "vehicle_type": 0,
+        "distance_too_long": 0,
+        "geocode_failure": 0
+    }
 
     for index, row in df.iterrows():
         if index % 10 == 0:
@@ -57,7 +61,7 @@ def calculate_distances_and_prime(df_rh, df_sport, df_activities=None):
 
         lat_lon_home = geocode_address(row["adresse_du_domicile"])
         time.sleep(1)
-        
+
         lat_lon_office = geocode_address(row["adresse_de_l_entreprise"])
         time.sleep(1)
 
@@ -65,30 +69,29 @@ def calculate_distances_and_prime(df_rh, df_sport, df_activities=None):
             distance_km = geodesic(lat_lon_home, lat_lon_office).km
         else:
             distance_km = 9999
+            invalid_reasons["geocode_failure"] += 1
 
         distances.append(distance_km)
 
         if row.get("moyen_de_deplacement") == "véhicule thermique/électrique":
-             eligible.append(False)
-
-             invalid_count += 1
+            eligible.append(False)
+            invalid_reasons["vehicle_type"] += 1
         else:
-            max_dist = MAX_DISTANCE.get(row["pratique_d_un_sport"], 25)
+            max_dist = MAX_DISTANCE.get(row.get("moyen_de_deplacement"), 25)
             if distance_km <= max_dist:
                 eligible.append(True)
             else:
                 eligible.append(False)
-                invalid_count += 1
+                invalid_reasons["distance_too_long"] += 1
 
     df["distance_km"] = distances
     df["prime_eligible"] = eligible
-    
+
     df["salaire_brut"] = pd.to_numeric(df["salaire_brut"], errors='coerce').fillna(0).astype(float)
     df["prime_eligible"] = df["prime_eligible"].astype(int)
     df["distance_km"] = df["distance_km"].astype(float)
-    
     df["prime_amount"] = (df["salaire_brut"] * PRIME_PERCENT * df["prime_eligible"]).astype(float)
-    
+
     df = calculate_wellness_eligibility(df, df_activities)
 
     cols_to_keep = [c for c in df.columns if not c.startswith('_airbyte') and c != 'employee_id']
@@ -96,7 +99,8 @@ def calculate_distances_and_prime(df_rh, df_sport, df_activities=None):
 
     for col in df.columns:
         if df[col].dtype == 'object':
-             if df[col].apply(lambda x: isinstance(x, (dict, list))).any():
+            if df[col].apply(lambda x: isinstance(x, (dict, list))).any():
                 df[col] = df[col].apply(lambda x: json.dumps(x) if isinstance(x, (dict, list)) else str(x) if x is not None else None)
-    
-    return df, invalid_count
+
+    invalid_count = sum(invalid_reasons.values())
+    return df, invalid_count, invalid_reasons

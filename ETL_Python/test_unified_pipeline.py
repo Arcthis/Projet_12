@@ -9,7 +9,8 @@ from extract import extract_data
 from generate import generate_activities
 from notify import process_new_activities
 from transform import calculate_distances_and_prime
-from load import load_dev
+from load import load_analytics
+
 import config
 from extract import get_engine
 from main import ensure_schemas_exist
@@ -40,7 +41,7 @@ def mock_airbyte_data(engine):
             "id_salarie": "EMP003",
             "nom": "CarUser",
             "prenom": "Bob",
-            "adresse_du_domicile": "12 Avenue Montaigne, Paris", # Very close to Champs-Élysées
+            "adresse_du_domicile": "12 Avenue Montaigne, Paris",
             "adresse_de_l_entreprise": "10 Avenue des Champs-Élysées, Paris",
             "salaire_brut": 60000,
             "moyen_de_deplacement": "véhicule thermique/électrique"
@@ -54,7 +55,7 @@ def mock_airbyte_data(engine):
         },
         {
             "id_salarie": "EMP002",
-            "pratique_d_un_sport": None
+            "pratique_d_un_sport": "Running"
         },
         {
             "id_salarie": "EMP003",
@@ -96,27 +97,26 @@ def verify_pipeline():
     from extract import extract_activities
     df_activities_all = extract_activities()
     
-    df_dev, invalid_count = calculate_distances_and_prime(df_rh, df_sport, df_activities=df_activities_all)
+    df_analytics, invalid_count, _ = calculate_distances_and_prime(df_rh, df_sport, df_activities=df_activities_all)
     print("Transformation OK.")
     
-    # Check for new column
-    if "jours_bien_etre" not in df_dev.columns:
+    if "jours_bien_etre" not in df_analytics.columns:
         raise AssertionError("ERROR: 'jours_bien_etre' column missing!")
     else:
         print("Wellness column check OK.")
 
     print("--- 5. Loading ---")
-    load_dev(df_dev)
+    load_analytics(df_analytics)
     
     with engine.connect() as conn:
-        res = conn.execute(text(f"SELECT count(*) FROM {config.DEV_SCHEMA}.dev_rh_sport"))
+        res = conn.execute(text(f"SELECT count(*) FROM {config.ANALYTICS_SCHEMA}.analytics_rh_sport"))
         count = res.scalar()
         assert count > 0
     print("Loading OK.")
     
-    emp3_status = df_dev[df_dev['id_salarie'] == 'EMP003']['prime_eligible'].iloc[0]
+    emp3_status = df_analytics[df_analytics['id_salarie'] == 'EMP003']['prime_eligible'].iloc[0]
     if emp3_status != 0:
-        print(f"DEBUG: EMP003 mean of transport: {df_dev[df_dev['id_salarie'] == 'EMP003']['moyen_de_deplacement'].iloc[0]}")
+        print(f"DEBUG: EMP003 mean of transport: {df_analytics[df_analytics['id_salarie'] == 'EMP003']['moyen_de_deplacement'].iloc[0]}")
         raise AssertionError(f"ERROR: EMP003 (Car user) should NOT be eligible, but prime_eligible is {emp3_status}")
     else:
         print("EMP003 eligibility check (Car user -> Not Eligible) OK.")
@@ -127,7 +127,7 @@ def run_test_pipeline():
     print("=== STARTING ISOLATED TEST PIPELINE ===")
     
     orig_raw = config.RAW_SCHEMA
-    orig_dev = config.DEV_SCHEMA
+    orig_analytics = config.ANALYTICS_SCHEMA
     
     import notify
     orig_send_slack = notify.send_slack_message
@@ -136,12 +136,11 @@ def run_test_pipeline():
         print(f"MOCKED SLACK: Would send notification for {row.get('employee_name', 'Unknown')}")
     
     try:
-        # Patch schemas
         config.RAW_SCHEMA = "test_raw"
-        config.DEV_SCHEMA = "test_dev"
+        config.ANALYTICS_SCHEMA = "test_analytics"
         notify.send_slack_message = mock_send_slack
         
-        print(f"Switched to test schemas: {config.RAW_SCHEMA}, {config.DEV_SCHEMA}")
+        print(f"Switched to test schemas: {config.RAW_SCHEMA}, {config.ANALYTICS_SCHEMA}")
         print("Mocked Slack notifications.")
         
         verify_pipeline()
@@ -151,9 +150,9 @@ def run_test_pipeline():
         raise e
     finally:
         config.RAW_SCHEMA = orig_raw
-        config.DEV_SCHEMA = orig_dev
+        config.ANALYTICS_SCHEMA = orig_analytics
         notify.send_slack_message = orig_send_slack
-        print(f"Restored production schemas: {config.RAW_SCHEMA}, {config.DEV_SCHEMA}")
+        print(f"Restored production schemas: {config.RAW_SCHEMA}, {config.ANALYTICS_SCHEMA}")
         print("Restored real Slack notifications.")
         print("=== END ISOLATED TEST PIPELINE ===")
 
