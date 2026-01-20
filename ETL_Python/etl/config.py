@@ -19,12 +19,11 @@ SLACK_CHANNEL = os.getenv("SLACK_CHANNEL_ID")
 CSV_PATH = os.getenv("CSV_PATH", os.path.join(base_dir, "generated_activities.csv"))
 
 RAW_SCHEMA = os.getenv("RAW_SCHEMA", "raw")
-DEV_SCHEMA = os.getenv("DEV_SCHEMA", "dev")
+ANALYTICS_SCHEMA = os.getenv("ANALYTICS_SCHEMA", "analytics")
 
 MAX_DISTANCE = {
-    'Vélo': 50,
-    'Running': 20,
-    'Marche': 10
+    'Vélo/Trottinette/Autres': 25,
+    'Marche/running': 15
 }
 PRIME_PERCENT = 0.05
 
